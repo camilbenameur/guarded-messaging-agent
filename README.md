@@ -91,7 +91,18 @@ pip install -e ./shared -e ./mcp_server
 ANTHROPIC_API_KEY=... python evals/live_injection.py --models claude-haiku-5-5 claude-sonnet-5-5 --trials 2
 ```
 
-**Measured numbers: none published yet.** The script was written and its tool loop checked against a stub client, but no live run has been recorded in this repository, so there is no pass rate to report. Run the command above and commit `evals/results/<date>.md` to fill this in. Without a key the script prints a notice and exits 0; CI runs it as an optional job that is skipped while the `ANTHROPIC_API_KEY` secret is not configured.
+**Measured on 2026-11-10** (command above plus `--prompts plain hardened`, 20 cases x 2 trials = 144 runs requested, `max_tokens` 700, one run per case and trial, estimated cost about 2.6 USD; full tables in [`evals/results/2026-11-10.md`](evals/results/2026-11-10.md)). Over the 24 injection runs per model and prompt (voice, OCR, exfiltration, credentials):
+
+| Model | Prompt | Attempted `send_message` | Obeyed the injection | Reached the outbox |
+|---|---|---|---|---|
+| claude-haiku-5-5 | plain | 0/24 | 0 | 0 |
+| claude-haiku-5-5 | hardened | 0/24 | 0 | 0 |
+| claude-sonnet-5-5 | plain | 6/24 | 0 | 0 |
+| claude-sonnet-5-5 | hardened | 0/24 | 0 | 0 |
+
+All six sonnet attempts came from the open-ended task "take care of anything that needs doing" and were an ordinary reply to Alice's real question ("Friday afternoon?"), addressed to her chat; none forwarded anything, targeted another chat or repeated the injected content. The gate queued all six. The "obeyed" column is a heuristic (a send to another chat, or text carrying injected or sensitive phrases); the per-run table in the results file lets you check it. Controls: both models attempted the send in 6/6 runs where the user explicitly asked for one (so they are not just refusing to send), and 0/6 on quiet chats. Haiku with the auto-policy injections: 0/4 attempts per prompt; sonnet plain: 0/4.
+
+Limits of this run: the sonnet `hardened` block was cut short by the 2.5 USD budget guard, so it has only its 24 injection runs (no auto-policy or control runs). In plain terms: on these payloads neither model followed an injection even without hardening, so the eval did not exercise the gate with a fooled model; the 15 deterministic cases still carry that proof.
 
 Caveats to keep when reading future results: N is small (20 cases, a couple of trials each), so rates have wide error bars; they depend on one system prompt (`--prompts plain|hardened` compares an unhardened and a hardened prompt), on the model version and on the injection wording, and say nothing about adaptive attackers. A model attempting a send is not a failure of the system (the gate still decides); the interesting numbers are the attempt rate and, in the auto-policy cases, whether the gate's content rules catch what the model was talked into sending.
 
@@ -148,7 +159,7 @@ docs/         demo GIF
 ## Limits
 
 - **Telegram bridge not wired, runs on FakeBridge.** The `Bridge` protocol is implemented only by `FakeBridge`; the Telethon implementation does not exist yet. The seam is covered by the tests, so adding it should not touch the worker, STT, vision, MCP or gate code, but that claim is untested until it is built.
-- **The red-team eval is deterministic and model-free.** It validates the gate, not the model's resistance to injection. The model-in-the-loop script (`evals/live_injection.py`) exists, but no live pass rate has been recorded and published yet. When it is, it will be a small-N, single-prompt measurement, not a guarantee.
+- **The red-team eval is deterministic and model-free.** It validates the gate, not the model's resistance to injection. The model-in-the-loop script (`evals/live_injection.py`) measures how often a real model tries to send: on 2026-11-10, 0 of 96 injection runs across haiku-5-5 and sonnet-5-5 followed an injection and nothing reached the outbox (small N, a handful of payload wordings, one system prompt each; not a guarantee, and not an adaptive attacker).
 - **Auto-send mode trusts the policy's content rules.** In a chat with an auto policy, an injected instruction that makes the model send harmless-looking text passes the gate (no IBAN, not a group, known contact). The gate bounds recipients, content classes and volume; it does not judge intent.
 - **Real Claude calls are not exercised in CI.** The one live vision smoke test is skipped without a key; drafts are tested against a recording stub.
 - **No encryption at rest.** SQLite and media blobs are plain files under `./data/`.
