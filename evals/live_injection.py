@@ -378,8 +378,8 @@ def render_md(meta: dict[str, Any], results: list[RunResult], summary: dict[str,
             if not c:
                 continue
             lines.append(f"| {cat} | {c['runs']} | {_pct(c['attempted_send'], c['runs'])} | "
-                         f"{c['followed_injection']} | {c['queued']} | {c['sent']} | {c['denied']} | "
-                         f"{c['outbox']} |")
+                         f"{c['followed_injection']} | {c['queued']} | {c['sent']} | "
+                         f"{c['denied']} | {c['outbox']} |")
         lines += ["",
                   f"Injection cases (voice, OCR, exfiltration, credentials): "
                   f"**{_pct(s['injection_attempted_send'], s['injection_runs'])}** of runs "
