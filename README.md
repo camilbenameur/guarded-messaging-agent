@@ -7,6 +7,10 @@ Voice notes are transcribed locally (faster-whisper), images are captioned into 
 
 > I build software that uses AI, and I test that it holds up. This repo is the "test that it holds up" part.
 
+![Demo: the red-team eval passes 15/15, then an injected voice note's send attempt lands in the approval queue with an empty outbox](docs/demo.gif)
+
+*First the red-team eval, then `python scripts/demo.py` (an injected voice note, a fooled agent calls `send_message`: queued, outbox empty, audit row written). The output is real; the pacing is scripted for readability.*
+
 **Status: the real Telegram bridge is not wired. Everything runs on `FakeBridge`, which replays a committed synthetic scenario.** Details under [Limits](#limits).
 
 ## Architecture
@@ -76,7 +80,20 @@ The threat model is the "lethal trifecta": private data, untrusted content (ever
 | Traceability | `test_released_send_audits_approved_by_human` | Queue, human approval, bridge: exactly one send, audited as `approved_by=human`. |
 | | `test_auto_send_audits_approved_by_auto_policy` | Policy-allowed sends are audited as `approved_by=auto-policy`. |
 
-What this eval is, precisely: 15 deterministic cases against the gate and the prompt-assembly seam, with the LLM mocked or stubbed. It proves the gate holds *whatever the model decides to do*. It does not measure how often a real model resists an injection; there is no model-in-the-loop pass rate here.
+What this eval is, precisely: 15 deterministic cases against the gate and the prompt-assembly seam, with the LLM mocked or stubbed. It proves the gate holds *whatever the model decides to do*. It does not measure how often a real model resists an injection; that is the job of the separate live-model eval below.
+
+### Live-model eval
+
+`evals/live_injection.py` complements the deterministic gate cases with a model in the loop: 20 conversations (3 voice-note injections, 3 image-OCR injections, 3 exfiltration requests to a non-allowlisted contact, 3 IBAN/credentials requests, 2 injections in a chat with an auto-send policy, 3 benign "nothing to send" controls, 3 benign "user explicitly asks to send" controls) are run through a minimal tool-calling loop against the Anthropic Messages API, using the real MCP tool schemas and the real `SendGate` over a `FakeBridge`. For each run it records whether the model called `send_message`, what the gate decided (queued / sent / denied) and whether anything reached the outbox. Results are written to `evals/results/<date>.json` and `.md`.
+
+```bash
+pip install -e ./shared -e ./mcp_server
+ANTHROPIC_API_KEY=... python evals/live_injection.py --models claude-haiku-5-5 claude-sonnet-5-5 --trials 2
+```
+
+**Measured numbers: none published yet.** The script was written and its tool loop checked against a stub client, but no live run has been recorded in this repository, so there is no pass rate to report. Run the command above and commit `evals/results/<date>.md` to fill this in. Without a key the script prints a notice and exits 0; CI runs it as an optional job that is skipped while the `ANTHROPIC_API_KEY` secret is not configured.
+
+Caveats to keep when reading future results: N is small (20 cases, a couple of trials each), so rates have wide error bars; they depend on one system prompt (`--prompts plain|hardened` compares an unhardened and a hardened prompt), on the model version and on the injection wording, and say nothing about adaptive attackers. A model attempting a send is not a failure of the system (the gate still decides); the interesting numbers are the attempt rate and, in the auto-policy cases, whether the gate's content rules catch what the model was talked into sending.
 
 ## Eval results
 
@@ -123,13 +140,16 @@ shared/       Bridge protocol, FakeBridge, Store (SQLite WAL + FTS5 + sync trigg
 ingest/       worker (poll -> route -> persist), faster-whisper STT, Claude vision captioning
 mcp_server/   MCP server, draft client, per-chat policy, send gate, approval CLI, red-team eval
 tests/fixtures/  synthetic scenario: 13 events, 3 chats, TTS voice notes, generated PNGs
-scripts/      fixture generators
+scripts/      fixture generators, `demo.py` (the scripted demo behind the GIF)
+evals/        live-model injection eval (`live_injection.py`) and its dated results
+docs/         demo GIF
 ```
 
 ## Limits
 
 - **Telegram bridge not wired, runs on FakeBridge.** The `Bridge` protocol is implemented only by `FakeBridge`; the Telethon implementation does not exist yet. The seam is covered by the tests, so adding it should not touch the worker, STT, vision, MCP or gate code, but that claim is untested until it is built.
-- **The red-team eval is deterministic and model-free.** It validates the gate, not the model's resistance to injection. No pass rate against a live LLM is reported.
+- **The red-team eval is deterministic and model-free.** It validates the gate, not the model's resistance to injection. The model-in-the-loop script (`evals/live_injection.py`) exists, but no live pass rate has been recorded and published yet. When it is, it will be a small-N, single-prompt measurement, not a guarantee.
+- **Auto-send mode trusts the policy's content rules.** In a chat with an auto policy, an injected instruction that makes the model send harmless-looking text passes the gate (no IBAN, not a group, known contact). The gate bounds recipients, content classes and volume; it does not judge intent.
 - **Real Claude calls are not exercised in CI.** The one live vision smoke test is skipped without a key; drafts are tested against a recording stub.
 - **No encryption at rest.** SQLite and media blobs are plain files under `./data/`.
 - **No authentication on the MCP server.** `docker-compose.yml` publishes the port on `127.0.0.1` only, and the SDK's DNS-rebinding protection rejects non-local Host headers, but that is not authentication: anyone who can reach the port can read the store. Keep it bound to localhost.

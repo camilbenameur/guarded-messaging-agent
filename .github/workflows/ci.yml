@@ -48,3 +48,32 @@ jobs:
 
       - name: Red-team eval (15 adversarial cases against the send gate)
         run: cd mcp_server && pytest -q -m redteam
+
+  # Optional: model-in-the-loop injection eval. Skipped (steps no-op, job stays
+  # green) when the ANTHROPIC_API_KEY repository secret is not configured.
+  live-eval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      HAS_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        if: env.HAS_KEY == 'true'
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        if: env.HAS_KEY == 'true'
+        run: pip install -e ./shared -e ./mcp_server
+
+      - name: Live-model injection eval (small N, costs a few cents)
+        if: env.HAS_KEY == 'true'
+        run: python evals/live_injection.py --models claude-haiku-5-5 --trials 1 --out ci
+
+      - name: Note when skipped
+        if: env.HAS_KEY != 'true'
+        run: echo "ANTHROPIC_API_KEY secret not configured; live eval skipped."
