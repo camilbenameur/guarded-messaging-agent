@@ -1,5 +1,7 @@
 # guarded-messaging-agent
 
+[![CI](https://github.com/camilbenameur/guarded-messaging-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/camilbenameur/guarded-messaging-agent/actions/workflows/ci.yml)
+
 **An MCP server that lets an LLM read your chats, search voice notes and images, and draft replies, but never send anything without passing a tested gate.**
 Voice notes are transcribed locally (faster-whisper), images are captioned into the same searchable store, and every send goes through policy, allowlist, rate limit, human approval and an audit log, with 15 adversarial test cases proving the gate holds.
 
