@@ -1,0 +1,26 @@
+# Secrets
+.env
+
+# Runtime data volumes
+data/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.venv/
+venv/
+build/
+dist/
+
+# Model caches (faster-whisper, etc.)
+.cache/
+models/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

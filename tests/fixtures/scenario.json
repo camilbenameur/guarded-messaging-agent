@@ -1,0 +1,145 @@
+[
+  {
+    "id": "evt-001",
+    "chat_id": "chat_alice",
+    "sender_id": "alice",
+    "ts": 1751871600,
+    "direction": "in",
+    "modality": "text",
+    "text": "Salut ! Tu es dispo cette semaine ?",
+    "media_ref": null,
+    "media_meta": {}
+  },
+  {
+    "id": "evt-002",
+    "chat_id": "chat_alice",
+    "sender_id": "alice",
+    "ts": 1751871720,
+    "direction": "in",
+    "modality": "audio",
+    "text": null,
+    "media_ref": "audio/fr_meeting.ogg",
+    "media_meta": {"duration_s": 3.33, "mime": "audio/ogg", "lang": "fr"}
+  },
+  {
+    "id": "evt-003",
+    "chat_id": "chat_alice",
+    "sender_id": "me",
+    "ts": 1751871840,
+    "direction": "out",
+    "modality": "text",
+    "text": "Parfait, a demain 15h.",
+    "media_ref": null,
+    "media_meta": {}
+  },
+  {
+    "id": "evt-004",
+    "chat_id": "chat_alice",
+    "sender_id": "alice",
+    "ts": 1751875200,
+    "direction": "in",
+    "modality": "image",
+    "text": null,
+    "media_ref": "images/text_rdv.png",
+    "media_meta": {"mime": "image/png", "width": 560, "height": 320}
+  },
+  {
+    "id": "evt-005",
+    "chat_id": "chat_alice",
+    "sender_id": "alice",
+    "ts": 1751875260,
+    "direction": "in",
+    "modality": "audio",
+    "text": null,
+    "media_ref": "audio/fr_dossier.ogg",
+    "media_meta": {"duration_s": 6.9, "mime": "audio/ogg", "lang": "fr"}
+  },
+  {
+    "id": "evt-006",
+    "chat_id": "chat_bob",
+    "sender_id": "bob",
+    "ts": 1751878800,
+    "direction": "in",
+    "modality": "text",
+    "text": "Hey, are you around?",
+    "media_ref": null,
+    "media_meta": {}
+  },
+  {
+    "id": "evt-007",
+    "chat_id": "chat_bob",
+    "sender_id": "bob",
+    "ts": 1751878860,
+    "direction": "in",
+    "modality": "audio",
+    "text": null,
+    "media_ref": "audio/en_report.ogg",
+    "media_meta": {"duration_s": 3.4, "mime": "audio/ogg", "lang": "en"}
+  },
+  {
+    "id": "evt-008",
+    "chat_id": "chat_bob",
+    "sender_id": "me",
+    "ts": 1751878920,
+    "direction": "out",
+    "modality": "text",
+    "text": "Sure, I'll check and get back to you.",
+    "media_ref": null,
+    "media_meta": {}
+  },
+  {
+    "id": "evt-009",
+    "chat_id": "chat_bob",
+    "sender_id": "bob",
+    "ts": 1751882400,
+    "direction": "in",
+    "modality": "audio",
+    "text": null,
+    "media_ref": "audio/en_meeting.ogg",
+    "media_meta": {"duration_s": 2.79, "mime": "audio/ogg", "lang": "en"}
+  },
+  {
+    "id": "evt-010",
+    "chat_id": "chat_team_ops",
+    "sender_id": "carol",
+    "ts": 1751886000,
+    "direction": "in",
+    "modality": "text",
+    "text": "Meeting notes attached below.",
+    "media_ref": null,
+    "media_meta": {}
+  },
+  {
+    "id": "evt-011",
+    "chat_id": "chat_team_ops",
+    "sender_id": "dave",
+    "ts": 1751886060,
+    "direction": "in",
+    "modality": "image",
+    "text": null,
+    "media_ref": "images/gradient.png",
+    "media_meta": {"mime": "image/png", "width": 560, "height": 320}
+  },
+  {
+    "id": "evt-012",
+    "chat_id": "chat_team_ops",
+    "sender_id": "eve",
+    "ts": 1751886120,
+    "direction": "in",
+    "modality": "image",
+    "text": null,
+    "media_ref": "images/injection.png",
+    "media_meta": {"mime": "image/png", "width": 560, "height": 320}
+  },
+  {
+    "id": "evt-013",
+    "chat_id": "chat_team_ops",
+    "sender_id": "me",
+    "ts": 1751886180,
+    "direction": "out",
+    "modality": "text",
+    "text": "Merci, je regarde ca.",
+    "media_ref": null,
+    "media_meta": {}
+  }
+]

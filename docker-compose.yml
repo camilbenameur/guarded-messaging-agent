@@ -1,0 +1,27 @@
+services:
+  ingest:
+    build:
+      context: .
+      dockerfile: ingest/Dockerfile
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - ./data/store:/store
+      - ./data/media:/media
+      # faster-whisper model cache (HF_HOME=/models, ingest/Dockerfile)
+      # so the STT model isn't re-downloaded on every container start.
+      - ./data/models:/models
+
+  mcp:
+    build:
+      context: .
+      dockerfile: mcp_server/Dockerfile
+    env_file:
+      - path: .env
+        required: false
+    ports:
+      - "127.0.0.1:8808:8808"
+    volumes:
+      - ./data/store:/store
+      - ./data/media:/media

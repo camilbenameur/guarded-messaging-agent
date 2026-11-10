@@ -1,0 +1,40 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ingest"
+version = "0.1.0"
+description = "Ingestion worker: bridge event normalization, STT, vision captioning, store DAL."
+requires-python = ">=3.12"
+dependencies = [
+    "shared",
+    "pillow>=10",
+    # local STT for voice notes (CTranslate2-backed Whisper). Model
+    # weights download on first use — see ingest/Dockerfile (HF_HOME) and
+    # docker-compose.yml (./data/models volume) for the on-disk cache.
+    "faster-whisper>=1.0",
+    "numpy>=1.24",
+    # official SDK for real vision captioning (ingest/src/ingest/vision.py).
+    # Only imported when ClaudeVision.caption() actually runs — MockVision
+    # (the default in tests) never touches this package.
+    "anthropic>=0.40",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ingest"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.pytest.ini_options]
+# "../shared/tests" relies on shared/ being a sibling of ingest/ (true both on
+# the host and inside the container image — see ingest/Dockerfile).
+testpaths = ["tests", "../shared/tests"]

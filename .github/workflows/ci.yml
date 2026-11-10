@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  HF_HOME: ${{ github.workspace }}/.hf-cache   # faster-whisper model cache
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: System deps (ffmpeg decodes OGG/Opus voice notes)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+
+      - name: Cache Whisper model (~460 MB, downloaded on first STT test)
+        uses: actions/cache@v4
+        with:
+          path: .hf-cache
+          key: whisper-small-v1
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ./shared -e "./ingest[dev]" -e "./mcp_server[dev]"
+
+      - name: Lint
+        run: ruff check shared ingest mcp_server
+
+      - name: Ingest + shared tests (STT runs on real fixtures, vision on mocks)
+        run: cd ingest && pytest -q
+
+      - name: MCP server tests
+        run: cd mcp_server && pytest -q
+
+      - name: Red-team eval (15 adversarial cases against the send gate)
+        run: cd mcp_server && pytest -q -m redteam
