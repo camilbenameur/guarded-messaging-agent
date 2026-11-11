@@ -11,7 +11,7 @@ Voice notes are transcribed locally (faster-whisper), images are captioned into 
 
 *First the red-team eval, then `python scripts/demo.py` (an injected voice note, a fooled agent calls `send_message`: queued, outbox empty, audit row written). The output is real; the pacing is scripted for readability.*
 
-**Status: the real Telegram bridge is not wired. Everything runs on `FakeBridge`, which replays a committed synthetic scenario.** Details under [Limits](#limits).
+**Status: a real `TelethonBridge` (Telegram user account) exists and is tested against a fake Telethon client; it has not been run against a live account in CI or by the author of this change. The demo, the tests and the default config use `FakeBridge`, which replays a committed synthetic scenario, with no key.** Details under [Limits](#limits).
 
 ## Try it in one command
 
@@ -31,8 +31,8 @@ Measured on a clean clone (Linux, Python 3.12, a busy shared machine, load avera
 
 ```
                  +-----------------------------+
-   Bridge        |  FakeBridge (today)         |   same `Bridge` protocol:
-   (seam)        |  TelethonBridge (not wired) |   poll / download_media / send_text
+   Bridge        |  FakeBridge  (BRIDGE=fake)  |   same `Bridge` protocol:
+   (seam)        |  TelethonBridge (=telegram) |   poll / download_media / send_text
                  +--------------+--------------+
                                 | events
                                 v
@@ -69,6 +69,8 @@ Measured on a clean clone (Linux, Python 3.12, a busy shared machine, load avera
               |                  every decision -> audit_log                 |
               +--------------------------------------------------------------+
 ```
+
+`BRIDGE` (`fake`, the default, or `telegram`) picks the implementation in `shared.bridge_factory`, for both the ingest worker (`python -m ingest`) and the MCP server's send path. `TelethonBridge` (`shared/telethon_bridge.py`) logs in as the owner's own user account over MTProto, polls with a cursor encoded in the event id (`tg.<ts>.<chat>.<msg>`), never marks anything as read, backs off on Telegram flood-waits, and connects per operation under a lock file so the worker and the MCP server can share one session file. Its only write is `send_text`, which is reachable only through the gate.
 
 Design rule: ingestion and consumption are decoupled. The bridge writes to the store; the LLM only reads the store through MCP tools and can only *propose* actions. `send_message` is the single exit and it is gated unconditionally.
 
@@ -131,12 +133,12 @@ Measured on 2026-11-10, Python 3.12.3, Linux, `mcp 1.30.0`, no API key (mocks), 
 | Suite | Command | Result |
 |---|---|---|
 | Red-team eval | `cd mcp_server && pytest -q -m redteam` | **15 passed**, 48 deselected, 10 s |
-| MCP server (incl. shared tests) | `cd mcp_server && pytest -q` | **63 passed**, 40 s |
-| Ingest (incl. shared tests) | `cd ingest && pytest -q` | **61 passed, 1 skipped**, 281 s (includes first Whisper model download, CPU) |
-| Shared | `cd shared && pytest -q` | **25 passed**, 15 s |
+| MCP server (incl. shared tests) | `cd mcp_server && pytest -q` | **99 passed**, 60 s |
+| Ingest (incl. shared tests) | `cd ingest && pytest -q` | **92 passed, 1 skipped**, 387 s (includes first Whisper model download, CPU) |
+| Shared | `cd shared && pytest -q` | **55 passed**, 15 s |
 | Lint | `ruff check shared ingest mcp_server` | all checks passed (ruff 0.17.4) |
 
-Unique tests: 100 (shared 25, ingest 37, mcp_server 38); 99 pass, 1 skipped. The skip is a smoke test of a real Claude vision call, which requires `ANTHROPIC_API_KEY`. STT is not mocked: real OGG/Opus fixtures are transcribed by faster-whisper and compared to their source text.
+Unique tests: 131 (shared 55, ingest 38, mcp_server 38); 130 pass, 1 skipped; the Telegram tests (shared 30, mcp_server 6, ingest 1) use a fake Telethon client. The skip is a smoke test of a real Claude vision call, which requires `ANTHROPIC_API_KEY`. STT is not mocked: real OGG/Opus fixtures are transcribed by faster-whisper and compared to their source text.
 
 ## Quickstart
 
@@ -160,12 +162,32 @@ curl http://localhost:8808/health        # {"status":"ok"}
 # any MCP client can connect to http://localhost:8808/mcp
 ```
 
+### Connect your Telegram
+
+Optional. Everything above works without it. This reads **your own account's** chats (a user session, not a bot), so do it on a machine you trust.
+
+1. Get an `api_id` and `api_hash`: sign in at <https://my.telegram.org> with your phone number, open **API development tools**, create an application (any name and short name; the platform does not matter), and copy **App api_id** and **App api_hash**. Each is tied to your account; keep them private.
+2. Put them in `.env` (copy `.env.example` first):
+   ```
+   BRIDGE=telegram
+   TELEGRAM_API_ID=123456
+   TELEGRAM_API_HASH=0123456789abcdef0123456789abcdef
+   ```
+3. Log in once, interactively, in your own terminal (it asks for your phone number, the code Telegram sends to your other device, and your 2FA password if you have one, and writes `./data/telegram/gma.session`, mode 600):
+   ```bash
+   pip install -e ./shared[telegram]
+   python -m shared.telegram_login            # offline check afterwards: --status
+   ```
+4. Start the stack: `docker compose up -d --build`. The worker (`python -m ingest`) polls every `INGEST_INTERVAL` seconds (default 30); the first poll looks back `TELEGRAM_BACKFILL_DAYS` (default 7). Queued sends are released with `python -m mcp_server.approve <id>` (with the same `.env`, or via `docker compose exec mcp python -m mcp_server.approve --list`).
+
+The compose file mounts `./data/telegram` read-write into both containers (Telethon updates the session file, and the MCP server needs it to send after approval). Chat ids in the store are Telegram peer ids (users and groups by id, supergroups as `-100...`); policies and allowlists are keyed on them. Broadcast channels are skipped unless `TELEGRAM_INCLUDE_CHANNELS=1`. Use a throwaway or low-stakes account first.
+
 Set `ANTHROPIC_API_KEY` in `.env` (see `.env.example`) to switch from mocks to real captions (`CAPTION_MODEL`) and real drafts (`DRAFT_MODEL`). Approve or reject queued sends from the console: `python -m mcp_server.approve --list`.
 
 ## Repo layout
 
 ```
-shared/       Bridge protocol, FakeBridge, Store (SQLite WAL + FTS5 + sync triggers)
+shared/       Bridge protocol, FakeBridge, TelethonBridge + login CLI + env factory, Store (SQLite WAL + FTS5 + sync triggers)
 ingest/       worker (poll -> route -> persist), faster-whisper STT, Claude vision captioning
 mcp_server/   MCP server, draft client, per-chat policy, send gate, approval CLI, red-team eval
 tests/fixtures/  synthetic scenario: 13 events, 3 chats, TTS voice notes, generated PNGs
@@ -176,7 +198,8 @@ docs/         demo GIF
 
 ## Limits
 
-- **Telegram bridge not wired, runs on FakeBridge.** The `Bridge` protocol is implemented only by `FakeBridge`; the Telethon implementation does not exist yet. The seam is covered by the tests, so adding it should not touch the worker, STT, vision, MCP or gate code, but that claim is untested until it is built.
+- **Telegram bridge: tested with fakes, not against the live API.** `TelethonBridge` is covered by unit tests over a fake Telethon client (event mapping for text, voice, photo, documents and video; cursor persistence and resume across a worker restart; flood-wait backoff and give-up; send through the gate; no read-marking call is ever made; no network). It has **not been run against a real Telegram account in CI, and not by the author of this change**: real behaviour of `iter_dialogs`/`iter_messages` paging, `offset_date` semantics, media downloads, session expiry, `FloodWaitError` timing and entity resolution for chats never seen by the session is unverified. The login CLI is tested with a stub client only. Expect to find bugs on first contact; start with a throwaway account.
+- **Telegram bridge limits.** Messages carry no chat title (the worker stores ids only). Edits and deletions are not tracked. A message delivered with a timestamp older than the cursor (clock skew, same second in another chat after the poll) can be missed. Voice notes over 25 MB and non-voice audio are not transcribed (audio files are `doc`). Secret chats are not readable by MTProto user sessions. Automating a user account may violate Telegram's terms of service if abused; this project polls slowly and sends only after the gate.
 - **The red-team eval is deterministic and model-free.** It validates the gate, not the model's resistance to injection. The model-in-the-loop script (`evals/live_injection.py`) measures how often a real model tries to send: on 2026-11-10, 0 of 96 injection runs across haiku-5-5 and sonnet-5-5 followed an injection and nothing reached the outbox (small N, a handful of payload wordings, one system prompt each; not a guarantee, and not an adaptive attacker).
 - **Auto-send mode trusts the policy's content rules.** In a chat with an auto policy, an injected instruction that makes the model send harmless-looking text passes the gate (no IBAN, not a group, known contact). The gate bounds recipients, content classes and volume; it does not judge intent.
 - **Real Claude calls are not exercised in CI.** The one live vision smoke test is skipped without a key; drafts are tested against a recording stub.

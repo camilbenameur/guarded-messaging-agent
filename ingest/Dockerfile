@@ -26,6 +26,6 @@ RUN mkdir -p /models
 
 WORKDIR /app/ingest
 
-# This image packages the ingestion library (worker, STT, vision) and its tests.
-# There is no long-running worker entrypoint yet: use `docker compose run --rm ingest pytest`.
-CMD ["python", "-c", "print('ingest: library image (worker, STT, vision). Run tests with: pytest')"]
+# Long-running worker (BRIDGE=fake needs BRIDGE_SCENARIO; BRIDGE=telegram needs the
+# session volume). Tests: `docker compose run --rm ingest pytest`.
+CMD ["python", "-m", "ingest"]

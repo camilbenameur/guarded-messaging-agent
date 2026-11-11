@@ -7,8 +7,8 @@ Usage (inside the `mcp` container, or any env with the packages installed):
     python -m mcp_server.approve --reject <id>   # discard one send (nothing is sent)
 
 The store comes from `STORE_DB_PATH` (default `/store/messages.db`). The
-bridge comes from `BRIDGE_SCENARIO` (a `FakeBridge` scenario path — demo/test
-only); with neither that nor a real transport configured, approvals are
+bridge comes from `BRIDGE` (`telegram`, or `fake` with `BRIDGE_SCENARIO` for
+demo/test); with neither configured, approvals are
 refused fail-closed and the row stays pending. A full approval UI is
 explicitly out of scope for the MVP —
 this console entry plus `SendGate.approve()` (callable from tests) is the
@@ -21,21 +21,18 @@ import argparse
 import os
 import sys
 
+from shared.bridge_factory import BridgeConfigError, build_bridge
 from shared.store import DEFAULT_DB_PATH, Store
 
 from mcp_server.gate import SendGate
 
 
 def _build_bridge():
-    """`FakeBridge` when `BRIDGE_SCENARIO` points at a scenario file (demo /
-    manual testing), else None — a real Telethon bridge would be swapped in here.
+    """The bridge selected by `BRIDGE` (`fake` + `BRIDGE_SCENARIO` for demos,
+    `telegram` for the real transport); None when neither is configured, in
+    which case approvals are refused fail-closed.
     """
-    scenario = os.environ.get("BRIDGE_SCENARIO")
-    if scenario:
-        from shared.fake_bridge import FakeBridge
-
-        return FakeBridge(scenario)
-    return None
+    return build_bridge()
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -51,7 +48,12 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     store = Store(os.environ.get("STORE_DB_PATH", DEFAULT_DB_PATH))
-    gate = SendGate(store, bridge=_build_bridge())
+    try:
+        bridge = _build_bridge()
+    except BridgeConfigError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    gate = SendGate(store, bridge=bridge)
 
     if args.list or args.queue_id is None:
         pending = gate.list_pending()

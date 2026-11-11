@@ -125,7 +125,16 @@ class SendGate:
                 decision.reason + " — but no bridge configured; queued for manual release",
                 now,
             )
-        message_id = self._bridge.send_text(chat_id, text)
+        try:
+            message_id = self._bridge.send_text(chat_id, text)
+        except Exception as exc:  # transport failure: fail closed, park for a human
+            logger.warning("gate.bridge_error", extra={"chat_id": chat_id, "error": str(exc)})
+            return self._enqueue(
+                chat_id,
+                text,
+                f"{decision.reason} — but the bridge failed ({type(exc).__name__}); queued",
+                now,
+            )
         self._store.append_audit(
             "send",
             chat_id,
@@ -167,7 +176,15 @@ class SendGate:
                 queue_id=queue_id,
             )
 
-        message_id = self._bridge.send_text(row["chat_id"], row["text"])
+        try:
+            message_id = self._bridge.send_text(row["chat_id"], row["text"])
+        except Exception as exc:  # the row stays pending; retry later
+            logger.warning("gate.bridge_error", extra={"queue_id": queue_id, "error": str(exc)})
+            return GateResult(
+                status="denied",
+                reason=f"bridge failed ({type(exc).__name__}: {exc}); row stays pending",
+                queue_id=queue_id,
+            )
         self._store.resolve_queued_send(
             queue_id,
             QUEUE_STATUS_APPROVED,

@@ -12,6 +12,11 @@ services:
       # faster-whisper model cache (HF_HOME=/models, ingest/Dockerfile)
       # so the STT model isn't re-downloaded on every container start.
       - ./data/models:/models
+      # Telethon session (full access to the account). Read-write: Telethon
+      # updates it. Create it first with `python -m shared.telegram_login`.
+      - ./data/telegram:/telegram
+    environment:
+      TELEGRAM_SESSION_PATH: /telegram/gma.session
 
   mcp:
     build:
@@ -25,3 +30,9 @@ services:
     volumes:
       - ./data/store:/store
       - ./data/media:/media
+      # Same session as the worker, used only to send after approval. Read-write
+      # because Telethon updates it; the bridge serializes access with a lock
+      # file next to it.
+      - ./data/telegram:/telegram
+    environment:
+      TELEGRAM_SESSION_PATH: /telegram/gma.session

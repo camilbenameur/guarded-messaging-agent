@@ -15,6 +15,8 @@ dependencies = [
     # docker-compose.yml (./data/models volume) for the on-disk cache.
     "faster-whisper>=1.0",
     "numpy>=1.24",
+    # Telegram transport (shared.telethon_bridge), only used with BRIDGE=telegram.
+    "telethon>=1.36,<2",
     # official SDK for real vision captioning (ingest/src/ingest/vision.py).
     # Only imported when ClaudeVision.caption() actually runs — MockVision
     # (the default in tests) never touches this package.

@@ -20,9 +20,8 @@ Tool classes:
 `create_mcp_server` takes `store`/`draft_client`/`bridge` as constructor-style
 arguments (dependency injection) so
 tests can bind a fresh `Store` + `MockDraft` + `FakeBridge` per run instead of
-touching a process-global. With `bridge=None` (this build's default — the real
-Telegram transport is not wired yet) the gate fails closed: nothing can auto-send, and
-queued sends can't be released.
+touching a process-global. With `bridge=None` (no `BRIDGE` configured) the gate
+fails closed: nothing can auto-send, and queued sends can't be released.
 """
 
 from __future__ import annotations
@@ -33,6 +32,7 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 from shared.bridge import Bridge
+from shared.bridge_factory import build_bridge
 from shared.store import DEFAULT_DB_PATH, Store
 from starlette.applications import Starlette
 from starlette.requests import Request
@@ -210,6 +210,8 @@ def build_asgi_app(
     """
     if store is None:
         store = Store(os.environ.get("STORE_DB_PATH", DEFAULT_DB_PATH))
+        if bridge is None:  # real entrypoint only: tests inject their own store/bridge
+            bridge = build_bridge()
 
     mcp = create_mcp_server(store, draft_client, bridge)
     app = mcp.streamable_http_app()

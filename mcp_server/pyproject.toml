@@ -12,6 +12,8 @@ dependencies = [
     "mcp>=1.9,<2",
     "anthropic>=0.40",
     "starlette>=0.37",
+    # Telegram transport (shared.telethon_bridge), only used with BRIDGE=telegram.
+    "telethon>=1.36,<2",
     "uvicorn>=0.30",
 ]
 
