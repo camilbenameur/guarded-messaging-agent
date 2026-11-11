@@ -138,7 +138,7 @@ Measured on 2026-11-10, Python 3.12.3, Linux, `mcp 1.30.0`, no API key (mocks), 
 | Shared | `cd shared && pytest -q` | **55 passed**, 15 s |
 | Lint | `ruff check shared ingest mcp_server` | all checks passed (ruff 0.17.4) |
 
-Unique tests: 131 (shared 55, ingest 38, mcp_server 38); 130 pass, 1 skipped; the Telegram tests (shared 30, mcp_server 6, ingest 1) use a fake Telethon client. The skip is a smoke test of a real Claude vision call, which requires `ANTHROPIC_API_KEY`. STT is not mocked: real OGG/Opus fixtures are transcribed by faster-whisper and compared to their source text.
+Unique tests: 137 (shared 55, ingest 38, mcp_server 44); 136 pass, 1 skipped; the Telegram tests (shared 30, mcp_server 6, ingest 1) use a fake Telethon client. The skip is a smoke test of a real Claude vision call, which requires `ANTHROPIC_API_KEY`. STT is not mocked: real OGG/Opus fixtures are transcribed by faster-whisper and compared to their source text.
 
 ## Quickstart
 
