@@ -13,7 +13,7 @@ env:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -52,7 +52,7 @@ jobs:
   # Optional: model-in-the-loop injection eval. Skipped (steps no-op, job stays
   # green) when the ANTHROPIC_API_KEY repository secret is not configured.
   live-eval:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     continue-on-error: true
     env:
