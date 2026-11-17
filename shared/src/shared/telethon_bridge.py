@@ -40,6 +40,8 @@ video note, GIF -> `video`; any other file -> `doc`. A caption goes in
 `media_meta["caption"]`. Service messages and unsupported content (polls,
 locations...) are skipped. Own messages have `sender_id == "me"` and direction
 `out`. Broadcast channels are skipped unless `include_channels=True`.
+Telegram's service chat (id 777000, where login codes arrive) is skipped unless
+`include_service_chat=True`.
 """
 
 from __future__ import annotations
@@ -185,6 +187,9 @@ def message_to_event(msg: Any, chat_id: str, max_caption: int = 4000) -> BridgeE
     )
 
 
+SERVICE_CHAT_ID = 777000  # Telegram's service notifications (login codes)
+
+
 class TelethonBridge:
     """`Bridge` over a Telethon user session. See the module docstring."""
 
@@ -204,6 +209,7 @@ class TelethonBridge:
         max_flood_wait: float = DEFAULT_MAX_FLOOD_WAIT,
         max_flood_retries: int = DEFAULT_MAX_FLOOD_RETRIES,
         include_channels: bool = False,
+        include_service_chat: bool = False,
         keep_connected: bool = False,
         use_lock: bool = True,
     ) -> None:
@@ -225,6 +231,7 @@ class TelethonBridge:
         self.max_flood_wait = max_flood_wait
         self.max_flood_retries = max_flood_retries
         self.include_channels = include_channels
+        self.include_service_chat = include_service_chat
         self.keep_connected = keep_connected
         self._use_lock = use_lock and client_factory is None
         self._loop: asyncio.AbstractEventLoop | None = None
@@ -370,6 +377,8 @@ class TelethonBridge:
         collected: list[tuple[Key, BridgeEvent]] = []
         horizon: Key | None = None  # lowest "last key" among chats that hit the per-chat limit
         for dialog in dialogs:
+            if dialog.id == SERVICE_CHAT_ID and not self.include_service_chat:
+                continue  # login codes arrive here; never ingest them by default
             if getattr(dialog, "is_channel", False) and not getattr(dialog, "is_group", False):
                 if not self.include_channels:
                     continue

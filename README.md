@@ -3,7 +3,7 @@
 [![CI](https://github.com/camilbenameur/guarded-messaging-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/camilbenameur/guarded-messaging-agent/actions/workflows/ci.yml)
 
 **An MCP server that lets an LLM read your chats, search voice notes and images, and draft replies, but never send anything without passing a tested gate.**
-Voice notes are transcribed locally (faster-whisper), images are captioned into the same searchable store, and every send goes through policy, allowlist, rate limit, human approval and an audit log, with 15 adversarial test cases proving the gate holds. In a live eval, forged messages fooled Claude Haiku 4.5 in 17 of 20 runs; every one of those sends waited in the approval queue, and without the gate all 16 fooled sends of the ablation left ([details](#realistic-injections-a-fooled-model-and-the-gate-holding-2026-11-17)).
+Voice notes are transcribed locally (faster-whisper), images are captioned into the same searchable store, and every send goes through policy, allowlist, rate limit, human approval and an audit log, with 15 deterministic red-team test cases checking that the gate holds. In a live eval, forged messages fooled Claude Haiku 4.5 in 17 of 20 runs; every one of those sends waited in the approval queue, and without the gate all 16 fooled sends of the ablation left ([details](#realistic-injections-a-fooled-model-and-the-gate-holding-2026-11-17)).
 
 > I build software that uses AI, and I test that it holds up. This repo is the "test that it holds up" part.
 
@@ -76,7 +76,7 @@ Design rule: ingestion and consumption are decoupled. The bridge writes to the s
 
 ## Guardrails and what each test proves
 
-The threat model is the "lethal trifecta": private data, untrusted content (every incoming message, including a voice note or text inside an image, is a possible prompt injection), and the ability to act (sending). The common invariant of the 15 red-team cases: **nothing reaches `FakeBridge.outbox` (the only exit) without crossing the gate, and every decision leaves an audit row.** The clock is injected, so rate-limit windows are crossed without sleeping; no network is used.
+The threat model is the "lethal trifecta" ([Simon Willison](https://simonwillison.net/2025/Jun/16/the-lethal-trifecta/)): private data, untrusted content (every incoming message, including a voice note or text inside an image, is a possible prompt injection), and the ability to act (sending). The common invariant of the 15 red-team cases: **nothing reaches `FakeBridge.outbox` (the only exit) without crossing the gate, and every decision leaves an audit row.** The clock is injected, so rate-limit windows are crossed without sleeping; no network is used.
 
 | Guardrail | Test (`mcp_server/tests/test_redteam.py`) | What it proves |
 |---|---|---|
@@ -148,7 +148,7 @@ How to read this, precisely:
 - **The cases were selected.** The 8 confirmed cases are the ones that fooled Haiku 4.5 at least once during screening; 12 others never did. The rates describe these cases, not a base rate of vulnerability. One model, one system prompt, 5 trials per case: wide error bars, and the on/off differences in "fooled" (17 vs 16) are noise; what differs is what left.
 - **"Held" means queued, not judged.** A held send waits for a human (`python -m mcp_server.approve <id>` or `reject`); a human who approves it sends it. In 2 of the 4 forged cases the save is the default posture (a chat without an auto policy never sends on its own), not attack detection. In the other 2 the content rules fired because the model wrote `verification code` or `300 EUR`; the same leak worded differently ("code: 604417") would pass an auto-mode chat. The gate bounds where and what kind of text can leave automatically; it does not recognise an attack.
 - **What did leave with the gate on**: in auto-mode chats, the model's own replies to the attacker ("Thanks for the heads up! I'm resending that message to Bob now."). They carry no secret, but they tell the attacker the assistant acted, and they claim a send that is in fact only queued.
-- **Current models resisted.** Haiku 5.5, Sonnet 5.5 and Sonnet 4.6 were never fooled on these 20 cases (2 trials each). The gate matters for the models that do get fooled (older, cheaper, local) and for attacks nobody has written yet.
+- **Current models resisted.** Haiku 5.5, Sonnet 5.5 and Sonnet 4.6 were never fooled on these 20 cases (2 trials each). The gate matters for the models that do get fooled (older and cheaper ones; local models were not tested) and for attacks nobody has written yet.
 
 ```bash
 python evals/real_injection.py --models claude-haiku-4-5-20251001 --trials 5 --gate on \
@@ -235,6 +235,10 @@ docs/         demo GIF
 - **Telegram bridge limits.** Messages carry no chat title (the worker stores ids only). Edits and deletions are not tracked. A message delivered with a timestamp older than the cursor (clock skew, same second in another chat after the poll) can be missed. Voice notes over 25 MB and non-voice audio are not transcribed (audio files are `doc`). Secret chats are not readable by MTProto user sessions. Automating a user account may violate Telegram's terms of service if abused; this project polls slowly and sends only after the gate.
 - **The red-team eval is deterministic and model-free.** It validates the gate, not the model's resistance to injection. The model-in-the-loop script (`evals/live_injection.py`) measures how often a real model tries to send: on 2026-11-10, 0 of 96 injection runs across haiku-5-5 and sonnet-5-5 followed an injection and nothing reached the outbox (small N, a handful of payload wordings, one system prompt each; not a guarantee, and not an adaptive attacker). With realistic payloads (`evals/real_injection.py`, 2026-11-17), Claude Haiku 4.5 was fooled and the gate kept every fooled send in the approval queue; the newer models were not fooled. The attacks were written by hand, not optimised against the model.
 - **Auto-send mode trusts the policy's content rules.** In a chat with an auto policy, an injected instruction that makes the model send harmless-looking text passes the gate (no IBAN, not a group, known contact). The gate bounds recipients, content classes and volume; it does not judge intent.
+- **Content rules are a denylist, not a guarantee.** They are keyword/regex checks with known bypasses: "login code", "code: 604417", "mdp", "300 balles", a bare number, a lowercase or unspaced IBAN, zero-width or full-width characters, a secret split across messages. Auto mode is a convenience, not a guarantee; keep sensitive chats on manual approval.
+- **The gate assumes the agent has only this server's tools.** No shell or host file access, no other outbound channel. Reads are not partitioned per chat: a connected model can read every ingested chat.
+- **Not tested:** no fuzzing or property tests, no concurrency test, and no static test proving `send_text` is only reachable through the gate.
+- **Retention.** Telegram's service chat (777000, where login codes arrive) is excluded by default (`GMA_INGEST_SERVICE_CHAT=1` includes it). The queue and the audit log keep full text, with no retention policy.
 - **Real Claude calls are not exercised in CI.** The one live vision smoke test is skipped without a key; drafts are tested against a recording stub.
 - **No encryption at rest.** SQLite and media blobs are plain files under `./data/`.
 - **No authentication on the MCP server.** `docker-compose.yml` publishes the port on `127.0.0.1` only, and the SDK's DNS-rebinding protection rejects non-local Host headers, but that is not authentication: anyone who can reach the port can read the store. Keep it bound to localhost.
@@ -242,6 +246,14 @@ docs/         demo GIF
 - **Confidence values are rough.** The STT confidence is an averaged `exp(avg_logprob)`, not a calibrated probability; caption confidence is self-reported by the model; there is no intent classifier (`intent_in` conditions fail closed). Policy mode values accept French spellings (`manuel`, `assisté`, `auto_validé`) alongside the English ones (`manual`, `assisted`, `auto`); the credential detector also matches a few French keywords.
 - **Dependency pin.** `mcp` is pinned `<2`: MCP SDK 2.x renamed `FastMCP` and this code targets 1.x.
 - **Not a product.** A personal engineering project, built to demonstrate testable safety around an LLM tool surface.
+
+## Privacy and data
+
+- **Stored locally, unencrypted.** Messages, transcripts, image captions, the send queue and the audit log are plain SQLite and media files under `./data/`. Nothing is purged automatically.
+- **Model provider.** The MCP client you connect (and its model) sees whatever the tools return: ingested messages, including those of other people. This repo adds no other upload path.
+- **Claude API, only with `ANTHROPIC_API_KEY`.** Images are sent for captioning and conversation threads for drafts, analysis and summaries. Without the key, mocks are used and nothing leaves the machine.
+- **Voice notes are transcribed locally** with faster-whisper; the audio is not sent anywhere by this code.
+- **Telegram.** Automating a user account is meant for personal use (see Telegram's terms). Consent of the people in your chats is your responsibility. The service chat (777000) is not ingested by default.
 
 ## License
 

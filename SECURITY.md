@@ -16,6 +16,11 @@
 - The bridge never marks messages as read and its only write is `send_text`, which is called only by the gate after policy and (unless an auto policy allows it) human approval. This is asserted with a fake client in tests, not against the live API.
 - `python -m shared.telegram_login` is the only code that asks for your phone, login code and 2FA password; it is interactive and never run by tests or CI.
 
+## Gate assumptions
+
+- The agent has only this server's tools: no shell, no host file access, no other outbound channel. Reads are not partitioned per chat.
+- Content rules are a keyword/regex denylist with known bypasses (see Limits in the README); auto mode is a convenience, not a guarantee.
+
 ## Reporting a vulnerability
 
-Open an issue at https://github.com/camilbenameur/guarded-messaging-agent/issues. For a bypass of the gate, describe the steps without a working exploit against third parties; the repo has no deployed service, so a public issue is fine.
+Please report privately through GitHub Security Advisories: use "Report a vulnerability" under the repo's Security tab (https://github.com/camilbenameur/guarded-messaging-agent/security/advisories/new). Do not open a public issue for a gate bypass. Describe the steps without a working exploit against third parties; the repo has no deployed service.

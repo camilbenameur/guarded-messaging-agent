@@ -58,6 +58,8 @@ def build_bridge(
             keep_connected=keep_connected,
             include_channels=(env.get("TELEGRAM_INCLUDE_CHANNELS") or "").lower()
             in ("1", "true", "yes", "on"),
+            include_service_chat=(env.get("GMA_INGEST_SERVICE_CHAT") or "").lower()
+            in ("1", "true", "yes", "on"),
             backfill_days=float(env.get("TELEGRAM_BACKFILL_DAYS") or 7),
         )
     scenario = env.get("BRIDGE_SCENARIO")

@@ -348,3 +348,29 @@ def test_real_client_is_configured_safely_without_connecting(tmp_path):
     assert client.parse_mode is None
     assert client.flood_sleep_threshold == 0
     assert not client.is_connected()
+
+
+def service_chat_scenario() -> list[FakeChat]:
+    return [
+        FakeChat(777000, [FakeMessage(1, T0, "Login code: 12345", sender_id=777000)]),
+        FakeChat(42, [FakeMessage(1, T0 + 1, "salut", sender_id=42)]),
+    ]
+
+
+def test_service_chat_is_skipped_by_default():
+    events = make_bridge(FakeTelegramClient(service_chat_scenario()))[0].poll(None)
+    assert [e.chat_id for e in events] == ["42"]
+
+
+def test_service_chat_can_be_included_explicitly():
+    bridge, _ = make_bridge(FakeTelegramClient(service_chat_scenario()), include_service_chat=True)
+    assert [e.chat_id for e in bridge.poll(None)] == ["777000", "42"]
+
+
+def test_service_chat_env_var_reaches_the_bridge():
+    from shared.bridge_factory import build_bridge
+
+    env = {"BRIDGE": "telegram", "TELEGRAM_API_ID": "1", "TELEGRAM_API_HASH": "h"}
+    assert build_bridge(env).include_service_chat is False  # type: ignore[union-attr]
+    on = build_bridge({**env, "GMA_INGEST_SERVICE_CHAT": "1"})
+    assert on.include_service_chat is True  # type: ignore[union-attr]
